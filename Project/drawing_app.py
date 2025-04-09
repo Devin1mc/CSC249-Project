@@ -10,7 +10,8 @@ class PaintApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Mini Paint Tool 🎨")
-
+        
+        self.mode = "draw"  # can be "draw" or "text"
         self.color = "black"
         self.brush_size = 3
         self.last_x, self.last_y = None, None
@@ -36,20 +37,31 @@ class PaintApp:
         tk.Button(toolbar, text="Color", command=self.choose_color).pack(side=tk.LEFT, padx=5)
         tk.Button(toolbar, text="Save", command=self.save_canvas).pack(side=tk.LEFT, padx=5)
         tk.Button(toolbar, text="Clear", command=self.clear_canvas).pack(side=tk.LEFT, padx=5)
+        tk.Button(toolbar, text="Text", command=self.enable_text_mode).pack(side=tk.LEFT, padx=5)
 
         self.brush_size_var = tk.IntVar(value=self.brush_size)
         tk.Spinbox(toolbar, from_=1, to=10, textvariable=self.brush_size_var, width=5, command=self.set_brush_size).pack(side=tk.LEFT)
 
     def set_start(self, event):
-        self.last_x, self.last_y = event.x, event.y
-        self.current_stroke = []
+        if self.mode == "draw":
+            self.last_x, self.last_y = event.x, event.y
+            self.current_stroke = []
+        elif self.mode == "text":
+            self.create_text_entry(event.x, event.y)
 
     def draw(self, event):
+        if self.mode != "draw":
+            return
+
         x, y = event.x, event.y
         if self.last_x is not None and self.last_y is not None:
             line = self.canvas.create_line(self.last_x, self.last_y, x, y, fill=self.color, width=self.brush_size)
             self.current_stroke.append((line, self.last_x, self.last_y, x, y, self.color, self.brush_size))
         self.last_x, self.last_y = x, y
+
+    
+    def enable_text_mode(self):
+        self.mode = "text"
 
     def end_stroke(self, event):
         if self.current_stroke:
@@ -64,22 +76,51 @@ class PaintApp:
 
     def set_brush_size(self):
         self.brush_size = self.brush_size_var.get()
+    
+    def create_text_entry(self, x, y):
+        entry = tk.Entry(self.canvas)
+        entry.place(x=x, y=y)
+        entry.focus_set()
+
+        def place_text(event=None):
+            text = entry.get()
+            if text:
+                text_id = self.canvas.create_text(x, y, text=text, anchor="nw", fill=self.color, font=("Arial", self.brush_size * 3))
+                self.stack.add_action(("text", [(text_id, x, y, text, self.color, self.brush_size)]))
+            entry.destroy()
+            self.mode = "draw"  # Switch back to drawing mode
+
+
+        entry.bind("<Return>", place_text)
+        entry.bind("<FocusOut>", place_text)
 
     def undo(self):
         action = self.stack.undo()
-        if action and action[0] == "stroke":
-            for line, *_ in action[1]:
-                self.canvas.delete(line)
+        if action:
+            if action[0] == "stroke":
+                for line, *_ in action[1]:
+                    self.canvas.delete(line)
+            elif action[0] == "text":
+                for text_id, *_ in action[1]:
+                    self.canvas.delete(text_id)
+
 
     def redo(self):
         action = self.stack.redo()
-        if action and action[0] == "stroke":
-            new_stroke = []
-            for _, x1, y1, x2, y2, color, width in action[1]:
-                line = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
-                new_stroke.append((line, x1, y1, x2, y2, color, width))
-            # Re-add stroke to undo stack
-            self.stack.undo_stack[-1] = ("stroke", new_stroke)
+        if action:
+            if action[0] == "stroke":
+                new_stroke = []
+                for _, x1, y1, x2, y2, color, width in action[1]:
+                    line = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
+                    new_stroke.append((line, x1, y1, x2, y2, color, width))
+                self.stack.undo_stack[-1] = ("stroke", new_stroke)
+            elif action[0] == "text":
+                new_text = []
+                for _, x, y, text, color, size in action[1]:
+                    text_id = self.canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Arial", size * 3))
+                    new_text.append((text_id, x, y, text, color, size))
+                self.stack.undo_stack[-1] = ("text", new_text)
+
             
     def save_canvas(self):
         # Ask the user where to save the image
