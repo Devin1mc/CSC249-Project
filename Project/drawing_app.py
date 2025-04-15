@@ -43,6 +43,7 @@ class PaintApp:
         tk.Button(toolbar, text="Clear", command=self.clear_canvas).pack(side=tk.LEFT, padx=5) # Clear button
         tk.Button(toolbar, text="Eraser", command=self.enable_eraser_mode).pack(side=tk.LEFT, padx=5) # Eraser button
         tk.Button(toolbar, text="Draw", command=self.enable_draw_mode).pack(side=tk.LEFT, padx=5) # Draw button
+        tk.Button(toolbar, text="Text", command=self.enable_text_mode).pack(side=tk.LEFT, padx=5) # Text button
 
         self.brush_size_var = tk.IntVar(value=self.brush_size)
         tk.Spinbox(toolbar, from_=1, to=10, textvariable=self.brush_size_var, width=5, command=self.set_brush_size).pack(side=tk.LEFT)
@@ -53,8 +54,12 @@ class PaintApp:
 
     # Method to enable eraser mode
     def set_start(self, event):
-        self.last_x, self.last_y = event.x, event.y
-        self.current_stroke = []
+        if self.mode == "draw" or self.mode == "eraser":
+            # Store the starting point of the stroke
+            self.last_x, self.last_y = event.x, event.y
+            self.current_stroke = []
+        elif self.mode == "text":
+            self.create_text_entry(event.x, event.y)
 
     # Method to set the starting point of the stroke
     def draw(self, event):
@@ -88,24 +93,57 @@ class PaintApp:
     # Method to enable eraser mode
     def enable_eraser_mode(self):
         self.mode = "eraser"
+    
+    # Method to enable text mode
+    def enable_text_mode(self):
+        self.mode = "text"
+
+    # Method to create a text entry box on the canvas
+    def create_text_entry(self, x, y):
+        entry = tk.Entry(self.canvas)
+        entry.place(x=x, y=y)
+        entry.focus_set()
+
+        def place_text(event=None):
+            text = entry.get()
+            if text:
+                text_id = self.canvas.create_text(x, y, text=text, anchor="nw", fill=self.color, font=("Arial", self.brush_size * 3))
+                self.stack.add_action(("text", [(text_id, x, y, text, self.color, self.brush_size)]))
+            entry.destroy()
+            self.mode = "draw"  # Switch back to drawing mode
+
+
+        entry.bind("<Return>", place_text)
+        entry.bind("<FocusOut>", place_text)
 
     # Method to undo the last action
     def undo(self):
         action = self.stack.undo()
-        if action and action[0] == "stroke":
-            for line, *_ in action[1]:
-                self.canvas.delete(line)
+        if action:
+            if action[0] == "stroke":
+                for line, *_ in action[1]:
+                    self.canvas.delete(line)
+            elif action[0] == "text":
+                for text_id, *_ in action[1]:
+                    self.canvas.delete(text_id)
 
     # Method to redo the last undone action
     def redo(self):
         action = self.stack.redo()
-        if action and action[0] == "stroke":
-            new_stroke = []
-            for _, x1, y1, x2, y2, color, width in action[1]:
-                line = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
-                new_stroke.append((line, x1, y1, x2, y2, color, width))
-            # Re-add stroke to undo stack
-            self.stack.undo_stack[-1] = ("stroke", new_stroke)
+        if action:
+            if action[0] == "stroke":
+                new_stroke = []
+                for _, x1, y1, x2, y2, color, width in action[1]:
+                    line = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
+                    new_stroke.append((line, x1, y1, x2, y2, color, width))
+                self.stack.undo_stack[-1] = ("stroke", new_stroke)
+            elif action[0] == "text":
+                new_text = []
+                for _, x, y, text, color, size in action[1]:
+                    text_id = self.canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Arial", size * 3))
+                    new_text.append((text_id, x, y, text, color, size))
+                self.stack.undo_stack[-1] = ("text", new_text)
+            
     # Method to save the canvas as an image      
     def save_canvas(self):
         # Ask the user where to save the image
