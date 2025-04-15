@@ -52,7 +52,7 @@ class PaintApp:
     def enable_draw_mode(self):
         self.mode = "draw"
 
-    # Method to enable eraser mode
+    # Method to set the starting point of the stroke
     def set_start(self, event):
         if self.mode == "draw" or self.mode == "eraser":
             # Store the starting point of the stroke
@@ -61,7 +61,7 @@ class PaintApp:
         elif self.mode == "text":
             self.create_text_entry(event.x, event.y)
 
-    # Method to set the starting point of the stroke
+    # Method to draw on the canvas
     def draw(self, event):
         if self.mode not in ["draw", "eraser"]:
             return
@@ -101,9 +101,11 @@ class PaintApp:
     # Method to create a text entry box on the canvas
     def create_text_entry(self, x, y):
         entry = tk.Entry(self.canvas)
+        # Gets the current mouse position where user clicked for text
         entry.place(x=x, y=y)
         entry.focus_set()
 
+        # Function to place the text on the canvas
         def place_text(event=None):
             text = entry.get()
             if text:
@@ -118,6 +120,7 @@ class PaintApp:
 
     # Method to undo the last action
     def undo(self):
+        # Calls the undo method from the stack
         action = self.stack.undo()
         if action:
             if action[0] == "stroke":
